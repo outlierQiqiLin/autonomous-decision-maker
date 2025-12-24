@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+
+ <!-- rosprolog for storing & providing ontology services -->
+  <param name="initial_package" type="string" value="world_percept_assig4" />
+  <node name="rosprolog" pkg="rosprolog" type="rosprolog_node" output="screen"/>
+
+  <rosparam file="$(find world_percept_assig4)/config/loadKnowledge.yaml" command="load"/>
+  <node pkg="world_percept_assig4"
+      type="reasoning_node"
+      name="reasoning_node"
+      args="$(find world_percept_assig4)"
+      output="screen" />
+</launch>

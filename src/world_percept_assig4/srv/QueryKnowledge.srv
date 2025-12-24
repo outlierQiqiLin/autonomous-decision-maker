@@ -1,0 +1,5 @@
+# Request: The category of objects the robot is looking for, such as "drink" or "bottle"
+string target_class
+---
+# Response: Prolog List of possible locations deduced, such as ["table_1", "shelf_1"]
+string[] likely_locations

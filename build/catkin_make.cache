@@ -1,0 +1,2 @@
+knowrob:knowrob_tutorial:navigation_pkg
+-DCATKIN_DEVEL_PREFIX=/home/user/exchange/ros/workspaces/ssy236_qiqil/devel -DCMAKE_INSTALL_PREFIX=/home/user/exchange/ros/workspaces/ssy236_qiqil/install -G Unix Makefiles

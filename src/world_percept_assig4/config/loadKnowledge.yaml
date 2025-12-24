@@ -1,0 +1,4 @@
+# Read the prolog queries
+read_prolog_queries:
+  saved_query_file: /queries/savedQueries.txt
+  save_flag: true

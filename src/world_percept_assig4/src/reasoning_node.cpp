@@ -98,36 +98,45 @@ private:
 
     // ---------------------------------------------------------
     // Callback: 查知识 (Learning -> Reasoning)
+    // 修改版：支持万能查询，方便测试 Task 1 所有谓词
     // ---------------------------------------------------------
     bool srv_query_callback(world_percept_assig4::QueryKnowledge::Request &req,
                             world_percept_assig4::QueryKnowledge::Response &res)
     {
-        ROS_INFO_STREAM("Reasoning: Querying candidates for [" << req.target_class << "]");
-
-        // 构造 Prolog 查询
-        // 使用你的 fp_reasoning.pl 中的谓词: candidate_place(Target, Place).
-        // 这会返回所有符合逻辑的候选地点（例如：找盘子 -> 返回所有桌子）
-        std::string query = "candidate_place('" + req.target_class + "', Place)";
+        // [关键修改] 直接把 req.target_class 当作完整的 Prolog 查询语句
+        // 例如：req.target_class 可能是 "support_surface(X)."
+        std::string query = req.target_class;
         
-        // 如果你想直接用 decide_search_order 也可以，但那个返回的是列表，处理起来稍复杂
-        // 这里我们先获取所有候选点，交给 Learning Node 去排序 (FP.T02)
+        ROS_INFO_STREAM("Reasoning: Executing Raw Query [" << query << "]");
 
-        PrologQuery bdgs = pl_.query(query);
+        try {
+            PrologQuery bdgs = pl_.query(query);
 
-        for (auto const& solution : bdgs)
+            for (auto const& solution : bdgs)
+            {
+                // 我们假设查询结果里都有一个变量叫 "Res" 或者 "X" 或者 "Place"
+                // 为了通用，我们遍历所有返回的变量，把它拼成字符串
+                std::string result_str = "";
+                
+                for (auto const& val : solution)
+                {
+                    // val.first 是变量名 (如 X), val.second 是值 (如 table_1)
+                    if (!result_str.empty()) result_str += ", ";
+                    result_str += val.second.as<std::string>();
+                }
+                
+                if (!result_str.empty())
+                {
+                    res.likely_locations.push_back(result_str);
+                    ROS_INFO_STREAM(" -> Result: " << result_str);
+                }
+            }
+        } 
+        catch (exception &e) 
         {
-            // 提取 Place 变量
-            std::string loc = solution["Place"].as<std::string>();
-            res.likely_locations.push_back(loc);
+            ROS_ERROR_STREAM("Query failed: " << e.what());
         }
 
-        if (res.likely_locations.empty()) {
-            ROS_WARN("Reasoning: No logical candidates found (Maybe need to explore first?).");
-        } else {
-            ROS_INFO_STREAM("Reasoning: Found " << res.likely_locations.size() << " candidates.");
-        }
-
-        if(m_query_flag_save) saveQueryToFile(query);
         return true;
     }
 

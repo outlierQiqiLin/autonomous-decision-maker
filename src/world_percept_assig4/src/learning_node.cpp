@@ -146,8 +146,8 @@ int main(int argc, char** argv)
 
     ros::Duration(2.0).sleep(); 
     
-    // 假设我们要找 plate (对应 fp_reasoning.pl 里的逻辑)
-    learner.run_mission("plate"); 
+    // 假设我们要找 bowl (对应 fp_reasoning.pl 里的逻辑)
+    learner.run_mission("bowl"); 
 
     ros::spin();
     return 0;

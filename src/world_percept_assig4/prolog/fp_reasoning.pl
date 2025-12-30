@@ -94,8 +94,8 @@ mark_searched(Target, Place) :-
 % 例如：table_big, table_small, shelf1, trash_bin, plate1 等
 % 注意：这里用的是 sub_atom/5 做“包含子串”的匹配
 
-% 如果名字包含 "plate" 则类型=plate
-infer_type_from_name(Name, plate)    :- atom(Name), sub_atom(Name, _, _, _, plate), !.
+% 如果名字包含 "bowl" 则类型=bowl
+infer_type_from_name(Name, bowl)    :- atom(Name), sub_atom(Name, _, _, _, bowl), !.
 
 % 如果名字包含 "table" 则类型=table
 infer_type_from_name(Name, table)    :- atom(Name), sub_atom(Name, _, _, _, table), !.
@@ -143,7 +143,7 @@ target_found(Target, Obj) :-
 
 % (I3) 候选搜索点推断：盘子更可能在桌子（support_surface）
 % 这是“先验知识”体现：不需要看到盘子也能推断“该去哪找”
-candidate_place(plate, Place) :- support_surface(Place).
+candidate_place(bowl, Place) :- support_surface(Place).
 
 % 如果你未来希望“盘子也可能在书架上”，就加：
 % candidate_place(plate, Place) :- storage(Place).

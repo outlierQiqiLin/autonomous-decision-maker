@@ -1,0 +1,18 @@
+string target_name
+int32 visited_E
+int32 visited_NE
+int32 visited_N
+int32 visited_NW
+int32 visited_W
+int32 visited_SW
+int32 visited_S
+int32 visited_SE
+---
+float32 p_E
+float32 p_NE
+float32 p_N
+float32 p_NW
+float32 p_W
+float32 p_SW
+float32 p_S
+float32 p_SE

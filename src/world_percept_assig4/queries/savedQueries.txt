@@ -1,9 +1,0 @@
-
-get_class('first_2015_trash_can')
-create_instance_from_class('first_2015_trash_can',0, Instance)
-get_class('coke_can')
-create_instance_from_class('coke_can',1, Instance)
-get_class('table')
-create_instance_from_class('table',2, Instance)
-get_class('bookshelf')
-create_instance_from_class('bookshelf',3, Instance)

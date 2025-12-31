@@ -7,6 +7,7 @@
 
 #include <world_percept_assig4/GotoObject.h>
 #include <world_percept_assig4/QueryKnowledge.h>
+#include <world_percept_assig4/PredictLikelihood.h>  
 
 class LearningNode
 {
@@ -14,12 +15,14 @@ private:
     ros::NodeHandle nh_;
     ros::ServiceClient client_reasoning_;
     ros::ServiceClient client_control_;
+    ros::ServiceClient client_ml_;
 
 public:
     LearningNode(ros::NodeHandle& nh) : nh_(nh)
     {
         client_reasoning_ = nh_.serviceClient<world_percept_assig4::QueryKnowledge>("/query_knowledge");
         client_control_ = nh_.serviceClient<world_percept_assig4::GotoObject>("GotoObject");
+        client_ml_ = nh_.serviceClient<world_percept_assig4::PredictLikelihood>("predict_likelihood");
 
         ROS_INFO("Learning Node initialized. Waiting for services...");
         ros::service::waitForService("/query_knowledge");
@@ -71,7 +74,7 @@ public:
             {
                 // 情况 B: 有候选地点
                 // 使用 ML 模型选择最佳地点
-                action_target = selectBestLocation(candidates);
+                action_target = selectBestLocation(candidates, target_object);
                 ROS_INFO_STREAM("ML Model selected best target: " << action_target);
             }
 
@@ -103,7 +106,7 @@ public:
 
 private:
     // FP.T02: 机器学习/概率模型接口
-    std::string selectBestLocation(const std::vector<std::string>& locations)
+    std::string selectBestLocation(const std::vector<std::string>& locations, const std::string& current_target_object_)
     {
         // 如果只有一个，直接去
         if (locations.size() == 1) return locations[0];
@@ -115,7 +118,7 @@ private:
 
         for (const auto& loc : locations)
         {
-            double prob = getProbabilityFromModel(loc);
+            double prob = getProbabilityFromModel(loc, current_target_object_);
             ROS_INFO_STREAM(" - " << loc << " : " << prob);
             
             if (prob > max_prob) {
@@ -127,14 +130,23 @@ private:
     }
 
     // 模拟训练好的模型预测
-    double getProbabilityFromModel(std::string loc)
+    double getProbabilityFromModel(std::string loc, std::string target_obj)
     {
-        // 简单逻辑：如果是 'table' 开头，概率高；如果是 'shelf'，概率低
-        // 这里的逻辑就是 FP.T02 要求你“实现一种学习方法”的地方
+        // 这里的逻辑就是 FP.T02 要求“实现一种学习方法”的地方
         // 你可以把它改成读取 CSV 文件，或者调用 Python 脚本
-        if (loc.find("table") != std::string::npos) return 0.8 + ((double)std::rand()/RAND_MAX)*0.1; 
-        if (loc.find("shelf") != std::string::npos) return 0.3;
-        return 0.1;
+        world_percept_assig4::PredictLikelihood srv;
+        srv.request.target_class = target_obj;
+        srv.request.location_name = loc;
+
+        if (client_ml_.call(srv))
+        {
+            return (double)srv.response.probability;
+        }
+        else
+        {
+            ROS_WARN("Failed to call ML service, using default.");
+            return 0.1; // Default fallback
+        }
     }
 };
 

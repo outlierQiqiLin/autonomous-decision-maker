@@ -72,6 +72,7 @@ add_service_files(
   loadKnowledge.srv
   GotoObject.srv
   QueryKnowledge.srv
+  PredictLikelihood.srv
 )
 
 ## Generate actions in the 'action' folder

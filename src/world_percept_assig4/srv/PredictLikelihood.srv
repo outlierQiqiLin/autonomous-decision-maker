@@ -1,0 +1,4 @@
+string target_class    # e.g., "bowl"
+string location_name   # e.g., "table_big"
+---
+float64 probability    # e.g., 0.95

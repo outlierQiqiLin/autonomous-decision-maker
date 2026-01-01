@@ -87,8 +87,8 @@ private:
         double dy = obj_pose.position.y - tiago_pose.position.y;
         double d = std::sqrt(dx*dx + dy*dy);
 
-        // [关键逻辑]：如果物体在 1.1 米以内（模拟摄像头视野）
-        if (d < 1.1) 
+        // [关键逻辑]：如果物体在 3 米以内（模拟摄像头视野）
+        if (d < 3.0)
         {
             // 检查这个物体是否已经处理过了
             auto it_seen = std::find(v_seen_obj_.begin(), v_seen_obj_.end(), obj_name);
@@ -122,6 +122,13 @@ private:
                 }
             }
         } 
+        else 
+        {
+            // [调试] 如果距离太远，打印出来看看（只打印一次，避免刷屏，可以用个简单的计数器或只打印特定物体）
+            if (obj_name.find("bowl") != std::string::npos) {
+                 ROS_WARN_STREAM_THROTTLE(2.0, "Percept: Bowl detected but too far! Dist=" << d);
+            }
+        }
     }
   } 
 }; 

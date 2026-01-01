@@ -72,6 +72,8 @@ add_service_files(
   loadKnowledge.srv
   GotoObject.srv
   QueryKnowledge.srv
+  TrainPredict.srv
+  UpdateLikelihood.srv
 )
 
 ## Generate actions in the 'action' folder
@@ -121,7 +123,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES world_percept_assig4
- CATKIN_DEPENDS roscpp std_msgs gazebo_msgs geometry_msgs rosprolog
+ CATKIN_DEPENDS roscpp std_msgs gazebo_msgs geometry_msgs rosprolog rospy message_runtime
 #  DEPENDS system_lib
 )
 

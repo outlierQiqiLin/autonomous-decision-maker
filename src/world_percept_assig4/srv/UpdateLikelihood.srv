@@ -1,0 +1,5 @@
+string target_name
+string sector
+float32 prob
+---
+bool ok

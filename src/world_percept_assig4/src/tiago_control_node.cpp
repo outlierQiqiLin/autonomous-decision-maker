@@ -47,8 +47,9 @@ private:
 
     //start to move or not
     bool goto_object_;
+    bool found_target;
 
-    // int call_interval_counter_ = 0;
+    int call_interval_counter_ = 0;
 
     //target name
     std::string target_object_name_;
@@ -161,17 +162,17 @@ private:
             ROS_WARN_THROTTLE(2.0,"No tiago pose");
             return;
         }
-        if(call_interval_counter_ % 50 == 0) 
-        { 
-            if(!updateTargetPose(target_object_name_)) 
-            { 
-                if(!has_target_pose_) 
-                { 
-                    publishZeroV(); 
-                    return; 
-                } 
-            } 
-        }
+        //  if(call_interval_counter_ % 50 == 0) 
+        //   { 
+        //      if(!updateTargetPose(target_object_name_)) 
+        //      { 
+        //          if(!has_target_pose_) 
+            //      {    
+            //        publishZeroV(); 
+            //        return; 
+            //       } 
+        //      } 
+        //   }
 
         if(!has_target_pose_) 
         { 

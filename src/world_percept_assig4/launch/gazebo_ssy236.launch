@@ -42,9 +42,9 @@
   <!-- <node pkg="world_percept_assig4" type="map_generator_node" name="map_generator_node" output="screen"/> -->
   <node pkg="world_percept_assig4" type="percept_node" name="percept_node" output="screen"/>
 
-  <!--
-  <node pkg="world_percept_assig" type="direct_percept_node" name="direct_percept_node" output="screen"/>
+  
+ <!-- <node pkg="world_percept_assig" type="direct_percept_node" name="direct_percept_node" output="screen"/>-->
   <node pkg="world_percept_assig4" type="knowledge_node" name="knowledge_node" output="screen"/>
-  <node pkg="world_percept_assig4" type="reasoning_node" name="reasoning_node" output="screen"/>
-  <node pkg="world_percept_assig4" type="tiago_control_node" name="tiago_control_node" output="screen"/>-->
+ <!-- <node pkg="world_percept_assig4" type="reasoning_node" name="reasoning_node" output="screen"/>-->
+  <node pkg="world_percept_assig4" type="tiago_control_node" name="tiago_control_node" output="screen"/>
 </launch>

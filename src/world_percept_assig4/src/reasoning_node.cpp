@@ -69,6 +69,25 @@ private:
     bool srv_assert_callback(world_percept_assig4::UpdateObjectList::Request &req,
                              world_percept_assig4::UpdateObjectList::Response &res)
     {
+        if(req.object_name.find("visited:") == 0){
+            std::string place_name = req.object_name.substr(8);
+            ROS_INFO_STREAM("Reasoning: marking [" << place_name << "] as visited");
+
+            std::stringstream ss;
+            ss << "assertz(visited('" << place_name << "'))";
+
+            try {
+                PrologQuery bdgs = pl_.query(ss.str());
+                for(auto const& solution : bdgs) { break; }
+                res.confirmation = true;
+
+            } catch (exception &e) {
+                res.confirmation = false;
+            }
+            return true;
+
+
+        }
         ROS_INFO_STREAM("Reasoning: Asserting perception of [" << req.object_name << "]");
         
         double x = req.object_pose.position.x;
@@ -102,17 +121,35 @@ private:
     bool srv_query_callback(world_percept_assig4::QueryKnowledge::Request &req,
                             world_percept_assig4::QueryKnowledge::Response &res)
     {
+        std::string query;
+
+        if(req.target_class.find("CHECK_FOUND:") == 0){
+            std::string real_target = req.target_class.substr(12);
+            ROS_INFO_STREAM("Reasoning: checking if [" << real_target << "] is found...");
+
+            query = "target_found('" + real_target + "', Obj)";
+            PrologQuery bdgs = pl_.query(query);
+
+            for (auto const& solution : bdgs)
+            {
+                std::string obj_name = solution["Obj"].as<std::string>();
+                res.likely_locations.push_back(obj_name);
+            }
+            return true;
+
+        }
+
         ROS_INFO_STREAM("Reasoning: Querying candidates for [" << req.target_class << "]");
 
         // 构造 Prolog 查询
         // 使用你的 fp_reasoning.pl 中的谓词: candidate_place(Target, Place).
         // 这会返回所有符合逻辑的候选地点（例如：找盘子 -> 返回所有桌子）
-        std::string query = "candidate_place('" + req.target_class + "', Place)";
+        std::string queryPlace = "candidate_place('" + req.target_class + "', Place), \\+ visited(Place)";
         
         // 如果你想直接用 decide_search_order 也可以，但那个返回的是列表，处理起来稍复杂
         // 这里我们先获取所有候选点，交给 Learning Node 去排序 (FP.T02)
 
-        PrologQuery bdgs = pl_.query(query);
+        PrologQuery bdgs = pl_.query(queryPlace);
 
         for (auto const& solution : bdgs)
         {
@@ -127,7 +164,7 @@ private:
             ROS_INFO_STREAM("Reasoning: Found " << res.likely_locations.size() << " candidates.");
         }
 
-        if(m_query_flag_save) saveQueryToFile(query);
+        if(m_query_flag_save) saveQueryToFile(queryPlace);
         return true;
     }
 

@@ -8,6 +8,7 @@
 #include <world_percept_assig4/GotoObject.h>
 #include <world_percept_assig4/QueryKnowledge.h>
 #include <world_percept_assig4/PredictLikelihood.h>  
+#include <world_percept_assig4/UpdateObjectList.h>  
 
 class LearningNode
 {
@@ -16,6 +17,7 @@ private:
     ros::ServiceClient client_reasoning_;
     ros::ServiceClient client_control_;
     ros::ServiceClient client_ml_;
+    ros::ServiceClient client_update_;
 
 public:
     LearningNode(ros::NodeHandle& nh) : nh_(nh)
@@ -23,6 +25,7 @@ public:
         client_reasoning_ = nh_.serviceClient<world_percept_assig4::QueryKnowledge>("/query_knowledge");
         client_control_ = nh_.serviceClient<world_percept_assig4::GotoObject>("GotoObject");
         client_ml_ = nh_.serviceClient<world_percept_assig4::PredictLikelihood>("predict_likelihood");
+        client_update_ = nh_.serviceClient<world_percept_assig4::UpdateObjectList>("/assert_knowledge");
 
         ROS_INFO("Learning Node initialized. Waiting for services...");
         ros::service::waitForService("/query_knowledge");
@@ -92,6 +95,25 @@ public:
                         // 注意：这里应该有等待机制，等待机器人到达后再进行下一次循环
                         // 为了简化，我们假设 Control Node 会处理好
                         ros::Duration(15.0).sleep(); // 模拟移动耗时
+
+                        ROS_INFO("Scanning surroundings...");
+                        ros::Duration(2.0).sleep();
+
+                        if(checkTargetFound(target_object)){
+                            ROS_INFO("Mission accompplished, the target has been found!");
+                            mission_complete = true;
+                            break;
+                        }
+
+                        world_percept_assig4::UpdateObjectList srv_mark;
+                        srv_mark.request.object_name = "visited:" + action_target;
+
+                        srv_mark.request.object_pose.position.x = 0;
+                        if(client_update_.call(srv_mark)) {
+                            ROS_INFO_STREAM("SUCCESS: marked: " << action_target <<  " as visited in Prolog");
+                        } else {
+                            ROS_ERROR("Failed to update visited status.");
+                        }
                     }
                 }
             }
@@ -147,6 +169,22 @@ private:
             ROS_WARN("Failed to call ML service, using default.");
             return 0.1; // Default fallback
         }
+    }
+
+    bool checkTargetFound(std::string target_class)
+    {
+        world_percept_assig4::QueryKnowledge srv;
+        srv.request.target_class = "CHECK_FOUND:" + target_class;
+
+        if (client_reasoning_.call(srv))
+        {
+            if (!srv.response.likely_locations.empty())
+            {
+                ROS_INFO_STREAM("Target found: " << srv.response.likely_locations[0] << " !");
+                return true;
+            }
+        }
+        return false;
     }
 };
 

@@ -87,8 +87,8 @@ private:
         double dy = obj_pose.position.y - tiago_pose.position.y;
         double d = std::sqrt(dx*dx + dy*dy);
 
-        // [关键逻辑]：如果物体在 3 米以内（模拟摄像头视野）
-        if (d < 3.0)
+        // [关键逻辑]：如果物体在 1 米以内（模拟摄像头视野）
+        if (d < 1.5)
         {
             // 检查这个物体是否已经处理过了
             auto it_seen = std::find(v_seen_obj_.begin(), v_seen_obj_.end(), obj_name);

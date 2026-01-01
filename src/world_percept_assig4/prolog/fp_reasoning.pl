@@ -132,7 +132,6 @@ container(X)       :- type(X, trashbin).
 % (I2) 目标是否已经看到：如果任务是 find_and_point(Target)
 % 且存在一个 seen(Obj) 且 type(Obj,Target)，则认为目标已看到
 target_seen(Target, Obj) :-
-    task(find_and_point(Target)),
     seen(Obj),
     type(Obj, Target).
 

@@ -77,34 +77,69 @@ Results can be found in the 'results' folder
 
 # FP. T02: Learning
 
-terminal1:
+## Description
+The objective of this task is to enable the Tiago robot to autonomously navigate through candidate locations to find a target object (e.g., a `bowl`). The system combines prior knowledge, reasoning, and online learning to optimize the search process.
+
+**Workflow:**
+1.  **Prior Knowledge:** The system initializes with prior knowledge (loaded from `savedQueries.txt`) to identify potential candidate locations (e.g., `table` and `cafe_table`).
+2.  **Initial State:** Initially, all candidate locations are assigned equal probability. The robot selects the search order based on a default sorting mechanism.
+3.  **Online Learning:** Based on the outcome of the search (Success or Failure at a specific location), the system updates the probability weights for that location using an online learning approach.
+4.  **Optimization:** In subsequent missions, the robot prioritizes locations with higher learned probabilities, effectively reducing the time required to find the target.
+
+
+## R1: 
+
+## R2: 
+
+## R3: 
+
+---
+
+## T02 Testing Instructions
+
+Follow these steps to validate the Learning and Navigation loop.
+
+### 1) Start the Simulation Environment (terminal1)
+Launch the Gazebo world with the Tiago robot.
+
 source ../knowrob_noetic/devel/setup.bash
 catkin_make
 export GAZEBO_RESOURCE_PATH=$GAZEBO_RESOURCE_PATH:/home/student/ros/workspaces/ssy236_qiqil/src/world_percept_assig4
 source devel/setup.bash
 roslaunch world_percept_assig4 gazebo_ssy236.launch
 
-terminal2 - reasoning:
+### 2) Start the Reasoning System (terminal2)
+Launch the Prolog reasoning engine to handle logic and inference.
+
 source devel/setup.bash
 roslaunch world_percept_assig4 reasoning.launch
 
-terminal3 - knowledge:
+### 3) Start the Knowledge Interface (terminal3)
+Start the node responsible for interfacing with the Knowledge Base (handling assertions and queries).
+
 source devel/setup.bash
 rosrun world_percept_assig4 knowledge_node $(rospack find world_percept_assig4)
 
-terminal4 - ml online learning:
+### 4) Start the Online Learning Module (Python) (terminal4)
+Important: For the first run (or to reset learning), delete the memory file to start with a clean state.
+
+Optional: Run this command ONLY if you want to clear previous learning results:
+rm ~/.ros/ml_prob_memory.pkl
+
 source devel/setup.bash
 cd ./src/world_percept_assig4
 chmod +x scripts/ml_online_learning_node.py
 rosrun world_percept_assig4 ml_online_learning_node.py
 
-terminal5 - learning_node:
+### 5) Start the Control & Mission Loop (terminal5)
+Start the main C++ node that coordinates reasoning, learning, and robot movement.
+
 source devel/setup.bash
 rosrun world_percept_assig4 learning_node
 
-terminal6 - add prior knowledge:
+### 6) Load Prior Knowledge (terminal6)
+Inject the initial facts (e.g., location of tables) into the Knowledge Base to trigger the candidate generation.
+
 source devel/setup.bash
 rosservice call /load_knowledge "start: 1"
 
-
-# FP. T03: Robotics

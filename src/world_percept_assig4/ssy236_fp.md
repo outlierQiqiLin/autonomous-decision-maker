@@ -93,6 +93,8 @@ The objective of this task is to enable the Tiago robot to autonomously navigate
 
 ## R3: 
 
+Changes of probability before and after learning and Confusion Matrix can be found in the 'results' folder
+
 ---
 
 ## T02 Testing Instructions

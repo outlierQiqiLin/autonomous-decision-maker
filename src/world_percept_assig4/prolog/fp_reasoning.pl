@@ -59,23 +59,35 @@ set_home_pose(X,Y,Yaw) :-
 % assert_percept/4：建议由 C++ 侧调用的“统一事实注入入口”
 % 输入：Name, X, Y, Z
 % 功能：
-%  1) 断言 seen(Name)
-%  2) 更新 pose(Name,X,Y,Z)
-%  3) 通过名字规则推断一个粗类型 T，然后断言 type(Name,T)
-assert_percept(Name, X, Y, Z) :-
-    % 如果已经 seen 过则不重复 assert；否则写入 seen(Name)
-    (   seen(Name) -> true ; assertz(seen(Name)) ),
+% 1) 断言 seen(Name)
+% 2) 更新 pose(Name,X,Y,Z)
+% 3) 通过名字规则推断一个粗类型 T，然后断言 type(Name,T)
+% 统一 Name：兼容 'bowl' / bowl / "bowl"
+normalize_name(NameIn, NameOut) :-
+( string(NameIn) -> atom_string(NameOut, NameIn)
+; atom(NameIn) -> NameOut = NameIn
+).
 
-    % pose 更新策略：先删旧的 pose(Name,...) 再写入新的
-    retractall(pose(Name,_,_,_)),
-    assertz(pose(Name,X,Y,Z)),
+assert_percept(NameIn, X, Y, Z) :-
+normalize_name(NameIn, Name),
 
-    % 从名字推断类型（这一步你必须按 Gazebo 模型命名调整）
-    infer_type_from_name(Name, T),
+% seen/1
+( seen(Name) -> true
+; assertz(seen(Name))
+),
 
-    % 同样：type 只保留一个，先删再写
-    retractall(type(Name,_)),
-    assertz(type(Name, T)).
+% pose/4：始终保持最新
+retractall(pose(Name,_,_,_)),
+assertz(pose(Name,X,Y,Z)),
+
+% type/2：由名字规则推断
+infer_type_from_name(Name, T),
+retractall(type(Name,_)),
+assertz(type(Name, T)).
+
+percept4(Name, X, Y, Z) :-
+seen(Name),
+pose(Name, X, Y, Z).
 
 % mark_searched/2：记录“我搜索过某个 Place，但没找到 Target”
 % 这是“负信息”，非常重要：即使没有新物体出现，你也能积累新知识

@@ -73,6 +73,7 @@ add_service_files(
   GotoObject.srv
   QueryKnowledge.srv
   PredictLikelihood.srv
+  AddObservation.srv
 )
 
 ## Generate actions in the 'action' folder

@@ -55,6 +55,17 @@ private:
     //target name
     std::string target_object_name_;
 
+    // Navigation state
+    enum NavState {
+        IDLE,           // 空闲
+        MOVING,         // 移动中
+        BACKING_UP      // 后退中（离开目标）
+    };
+    
+    NavState nav_state_;
+    ros::Time backup_start_time_;
+    double backup_duration_;  // 后退持续时间（秒）
+
     //stop the robot
     void publishZeroV()
     {
@@ -116,8 +127,16 @@ private:
         // confirm = true 表示“空闲/已到达”，confirm = false 表示“正在移动中”
         if (req.start == 2)
         {
-            res.confirm = !goto_object_; // 如果 goto_object_ 为 false，说明到达了或空闲
-            res.message = goto_object_ ? "Moving" : "Idle/Arrived";
+            // 只有在 IDLE 状态才算"到达"
+            res.confirm = (nav_state_ == IDLE);
+            
+            if (nav_state_ == IDLE)
+                res.message = "Idle/Arrived";
+            else if (nav_state_ == MOVING)
+                res.message = "Moving to target";
+            else if (nav_state_ == BACKING_UP)
+                res.message = "Backing up";
+
             return true;
         }
 
@@ -140,6 +159,7 @@ private:
 
         goto_object_ =true;
         has_target_pose_ = false;  // 强制重新查找目标位置
+        nav_state_ = MOVING;  // 设置为移动状态
 
         res.confirm =true;
         res.message ="Navigation started";
@@ -165,6 +185,37 @@ private:
         }
         has_tiago_pose_= found_tiago;
 
+        // 处理后退状态防止太近无法调转方向
+        if (nav_state_ == BACKING_UP)
+        {
+            double elapsed = (ros::Time::now() - backup_start_time_).toSec();
+            
+            if (elapsed < backup_duration_)
+            {
+                // 继续后退
+                geometry_msgs::Twist cmd;
+                cmd.linear.x = -0.2;  // 负速度 = 后退
+                cmd.angular.z = 0.0;
+                send_twist_pub_.publish(cmd);
+                
+                ROS_INFO_THROTTLE(0.5, "Backing up... %.1f/%.1f sec", 
+                                elapsed, backup_duration_);
+                return;
+            }
+            else
+            {
+                // 后退完成
+                publishZeroV();
+                ROS_INFO("Backup complete. Ready for next target.");
+                
+                nav_state_ = IDLE;
+                goto_object_ = false;
+                has_target_pose_ = false;
+                return;
+            }
+        }
+
+        // 如果不在导航模式，直接返回
         if (!goto_object_)
             return;
 
@@ -191,7 +242,7 @@ private:
             return; 
         }
 
-      
+        // 导航逻辑
         // Extract 2D positions
         Eigen::Vector2d tiago_w(tiago_pose_.position.x, tiago_pose_.position.y);
         Eigen::Vector2d target_w(target_pose_.position.x, target_pose_.position.y);
@@ -218,17 +269,20 @@ private:
         
         if(d <= 0.85) 
         { 
-            tiago_twist_cmd.linear.x = 0.0; 
-            tiago_twist_cmd.angular.z = 0.0; 
-            send_twist_pub_.publish(tiago_twist_cmd);
-            ROS_INFO_THROTTLE(2.0, "Target reached! Stopping."); 
-            goto_object_ = false;
-            has_target_pose_ = false;
+            // 到达目标 -> 切换到后退状态
+            publishZeroV();
+            
+            ROS_INFO("Target reached! Starting backup maneuver..."); 
+            
+            nav_state_ = BACKING_UP;
+            backup_start_time_ = ros::Time::now();
+
             return;
         } 
         else 
         { 
             // normal movement
+            nav_state_ = MOVING;
             tiago_twist_cmd.linear.x = Kvx * d; 
             tiago_twist_cmd.angular.z = Kwz * theta; 
             send_twist_pub_.publish(tiago_twist_cmd);
@@ -244,7 +298,9 @@ public:
         :nh_(nh),
         has_target_pose_(false),
         has_tiago_pose_(false),
-        goto_object_(false)
+        goto_object_(false),
+        nav_state_(IDLE),          // 初始化
+        backup_duration_(1.0)      // 后退2秒
     {
         model_states_sub_=nh_.subscribe("/gazebo/model_states", 10, &tiago_control_node::modelStateCallback, this);
         send_twist_pub_=nh_.advertise<geometry_msgs::Twist>("/key_vel", 10);

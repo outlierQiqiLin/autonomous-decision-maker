@@ -77,4 +77,34 @@ Results can be found in the 'results' folder
 
 # FP. T02: Learning
 
+terminal1:
+source ../knowrob_noetic/devel/setup.bash
+catkin_make
+export GAZEBO_RESOURCE_PATH=$GAZEBO_RESOURCE_PATH:/home/student/ros/workspaces/ssy236_qiqil/src/world_percept_assig4
+source devel/setup.bash
+roslaunch world_percept_assig4 gazebo_ssy236.launch
+
+terminal2 - reasoning:
+source devel/setup.bash
+roslaunch world_percept_assig4 reasoning.launch
+
+terminal3 - knowledge:
+source devel/setup.bash
+rosrun world_percept_assig4 knowledge_node $(rospack find world_percept_assig4)
+
+terminal4 - ml online learning:
+source devel/setup.bash
+cd ./src/world_percept_assig4
+chmod +x scripts/ml_online_learning_node.py
+rosrun world_percept_assig4 ml_online_learning_node.py
+
+terminal5 - learning_node:
+source devel/setup.bash
+rosrun world_percept_assig4 learning_node
+
+terminal6 - add prior knowledge:
+source devel/setup.bash
+rosservice call /load_knowledge "start: 1"
+
+
 # FP. T03: Robotics

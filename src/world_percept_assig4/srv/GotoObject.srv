@@ -6,3 +6,4 @@ int32 start
 #Response is a boolean called “confirm”
 bool confirm
 string message
+bool arrived  # NEW: true if robot has reached destination

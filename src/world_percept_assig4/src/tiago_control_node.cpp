@@ -1,3 +1,4 @@
+// tiago_control_node.cpp
 #include <ros/ros.h>
 #include <gazebo_msgs/ModelStates.h>
 #include <geometry_msgs/Twist.h>
@@ -111,6 +112,15 @@ private:
     //callback for gotoObject
     bool gotoObjectCallback(world_percept_assig4::GotoObject::Request &req,world_percept_assig4::GotoObject::Response &res)
     {
+        // 如果 start 为 2，我们将其作为“查询状态”的请求
+        // confirm = true 表示“空闲/已到达”，confirm = false 表示“正在移动中”
+        if (req.start == 2)
+        {
+            res.confirm = !goto_object_; // 如果 goto_object_ 为 false，说明到达了或空闲
+            res.message = goto_object_ ? "Moving" : "Idle/Arrived";
+            return true;
+        }
+        
         if (req.start !=1)
         {
             res.confirm = false;

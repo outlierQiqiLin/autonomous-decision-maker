@@ -1,3 +1,4 @@
+// learning_node.cpp
 #include <ros/ros.h>
 #include <string>
 #include <vector>
@@ -91,10 +92,47 @@ public:
                 if (client_control_.call(srv_ctrl))
                 {
                     if (srv_ctrl.response.confirm) {
-                        ROS_INFO("Robot moving...");
-                        // 注意：这里应该有等待机制，等待机器人到达后再进行下一次循环
-                        // 为了简化，我们假设 Control Node 会处理好
-                        ros::Duration(15.0).sleep(); // 模拟移动耗时
+                        ROS_INFO_STREAM("Command sent. Robot moving to " << action_target << "...");
+
+                        bool arrived = false;
+                        ros::Rate poll_rate(2); // 每秒检查2次
+                        
+                        // 设置一个最大超时时间，防止死循环 (比如60秒)
+                        ros::Time start_time = ros::Time::now();
+                        double timeout = 60.0;
+
+                        while(ros::ok() && !arrived)
+                        {
+                            // 1. 发送查询请求 (start = 2)
+                            world_percept_assig4::GotoObject srv_status;
+                            srv_status.request.start = 2; 
+                            srv_status.request.object_name = ""; // 不需要名字
+
+                            if (client_control_.call(srv_status))
+                            {
+                                // 如果 confirm 为 true，说明 tiago_control_node 认为已经停止/到达
+                                if (srv_status.response.confirm) {
+                                    arrived = true;
+                                    ROS_INFO("Robot arrived at target.");
+                                } else {
+                                    // 还在移动，继续等待
+                                    ROS_INFO_THROTTLE(2.0, "Robot is still moving...");
+                                }
+                            }
+                            else
+                            {
+                                ROS_WARN("Failed to call control service for status check.");
+                            }
+
+                            // 2. 检查超时
+                            if ((ros::Time::now() - start_time).toSec() > timeout) {
+                                ROS_WARN("Navigation Timeout! Robot took too long.");
+                                break; // 强制跳出
+                            }
+
+                            ros::spinOnce();
+                            poll_rate.sleep();
+                        }
 
                         ROS_INFO("Scanning surroundings...");
                         ros::Duration(2.0).sleep();
@@ -118,8 +156,6 @@ public:
                 }
             }
             
-            // 4. (可选) 检查任务是否完成
-            // 可以在这里再次查询 Prolog: target_found(Target)?
             
             ros::spinOnce();
             rate.sleep();

@@ -166,6 +166,16 @@ class MLOnlineLearningNode:
 
         # 加载或初始化概率记忆
         self.pm = self._load_or_init_memory()
+        # -----------------------------
+        # 在线混淆矩阵（最简单版）
+        # -----------------------------
+        self.cm_threshold = 0.5   # p >= 0.5 认为“预测能找到”
+        self.cm_tp = 0
+        self.cm_fp = 0
+        self.cm_tn = 0
+        self.cm_fn = 0
+        self.cm_n  = 0
+
 
         # 发布一个简单可读的 topic，方便你用 rostopic echo 看“概率快照”
         self.pub_snapshot = rospy.Publisher("/ml_node/prob_snapshot", String, queue_size=10)
@@ -180,11 +190,11 @@ class MLOnlineLearningNode:
 
         # ★给 C++ learning_node 用的：探索结果写入服务（名字必须是 add_observation）
         self.srv_add_cpp = rospy.Service("add_observation", AddObservation, self.handle_add_observation_srv)
-        rospy.loginfo("ML 在线学习节点启动完成。")
-        rospy.loginfo("服务：/ml_node/add_observation  /ml_node/predict  /ml_node/rank_candidates")
-        rospy.loginfo("记忆文件：%s", self.memory_path)
-        rospy.loginfo("历史CSV：%s", self.csv_path)
-        rospy.loginfo("图片输出：%s (save_plot=%s)", self.plot_path, self.save_plot)
+        rospy.loginfo("ML online node start.")
+        rospy.loginfo("Service:/ml_node/add_observation  /ml_node/predict  /ml_node/rank_candidates")
+        rospy.loginfo("memorey files:%s", self.memory_path)
+        rospy.loginfo("history CSV:%s", self.csv_path)
+        rospy.loginfo("plot :%s (save_plot=%s)", self.plot_path, self.save_plot)
 
         # 启动时也发一次默认快照（方便你立刻看到初始 0.5）
         self._publish_and_log_snapshot(obj="bowl")
@@ -203,6 +213,34 @@ class MLOnlineLearningNode:
 
         p = self.pm.probability(obj, loc_type)
         return PredictLikelihoodResponse(p)
+    
+    def _update_and_print_confusion(self, p_before: float, found: bool):
+    
+        y_pred = 1 if p_before >= self.cm_threshold else 0
+        y_true = 1 if found else 0
+
+        if y_pred == 1 and y_true == 1:
+            self.cm_tp += 1
+        elif y_pred == 1 and y_true == 0:
+            self.cm_fp += 1
+        elif y_pred == 0 and y_true == 0:
+            self.cm_tn += 1
+        else:
+            self.cm_fn += 1
+
+        self.cm_n += 1
+
+        
+        acc = (self.cm_tp + self.cm_tn) / self.cm_n if self.cm_n > 0 else 0.0
+
+        print("=== Confusion Matrix (online) ===")
+        print("threshold =", self.cm_threshold)
+        print("Pred\\True | found(1) | not_found(0)")
+        print(f"found(1)  | TP={self.cm_tp:<4d} | FP={self.cm_fp:<4d}")
+        print(f"not(0)    | FN={self.cm_fn:<4d} | TN={self.cm_tn:<4d}")
+        print(f"n={self.cm_n}  accuracy={acc:.3f}")
+        print()
+
 
 
     def handle_add_observation_srv(self, req):
@@ -217,13 +255,18 @@ class MLOnlineLearningNode:
 
         loc_type = self.normalize_location(loc_name)
 
-        # 更新概率记忆
+        # ★ 1) 更新前先取一次概率，用于混淆矩阵
+        p_before = self.pm.probability(obj, loc_type)
+        self._update_and_print_confusion(p_before, found)
+
+        # ★ 2) 再进行真正的学习更新
         self.pm.update(obj, loc_type, found)
 
         ok, save_msg = self._save_memory()
 
-        # 更新后发布/打印快照（保留你原来的“可视化概率变化”）
+        # ★ 3) 原有的概率柱状图（保持不变）
         self._publish_and_log_snapshot(obj=obj)
+
 
         msg = f"updated: obj={obj}, loc_name='{loc_name}' -> loc_type={loc_type}, found={found}; {save_msg}"
         rospy.loginfo(msg)
@@ -274,7 +317,7 @@ class MLOnlineLearningNode:
                 with open(self.memory_path, "rb") as f:
                     state = pickle.load(f)
                 pm = ProbabilityMemory.load_state(state)
-                rospy.loginfo("已加载历史概率记忆。")
+                rospy.loginfo("loading history of probability")
                 return pm
             except Exception as e:
                 rospy.logwarn("加载记忆失败，将重新初始化。原因：%s", str(e))
@@ -309,11 +352,10 @@ class MLOnlineLearningNode:
         snap_sorted = sorted(snap, key=lambda x: x[1], reverse=True)
 
         # 组织字符串：便于 rostopic echo
-        lines = [f"目标物体: {obj}  (先验 alpha=beta=1 => 初始0.5)"]
+        lines = [f"Target  object: {obj}  (Prio alpha=beta=1 => init 0.5)"]
         for lt, p, s, f in snap_sorted:
             lines.append(f"- {lt:<15s}  p={p:.4f}  S={s} F={f}  {self._bar(p)}")
         best = snap_sorted[0][0]
-        lines.append(f"建议优先探索: {best}")
         msg = "\n".join(lines)
 
         # 发布 topic

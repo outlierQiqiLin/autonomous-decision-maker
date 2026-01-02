@@ -145,7 +145,7 @@ class MLOnlineLearningNode:
         # 四个候选地点（你当前场景固定这四个；未来可以改为参数或从 KB 传入）
         self.candidates_raw = [
             "book shelf",
-            "coffee table",
+            "cafe table",
             "table",
             "trash contain",
         ]
@@ -239,7 +239,7 @@ class MLOnlineLearningNode:
         """
         将任意 location_name 归一化到 4 类（或 unknown）：
         - book_shelf
-        - coffee_table
+        - cafe_table
         - table
         - trash_container
         """
@@ -249,9 +249,9 @@ class MLOnlineLearningNode:
 
         if "book" in s and "shelf" in s:
             return "book_shelf"
-        if "coffee" in s and "table" in s:
-            return "coffee_table"
-        # 注意：coffee_table 要先匹配，否则会被下面 table 吃掉
+        if "cafe" in s and "table" in s:
+            return "cafe_table"
+        # 注意：cafe_table 要先匹配，否则会被下面 table 吃掉
         if "table" in s:
             return "table"
         if "trash" in s and ("contain" in s or "container" in s or "bin" in s):
@@ -389,7 +389,7 @@ class MLOnlineLearningNode:
         """
         从参数读取一条观测并更新：
           ~obs_target_class  (str)  例如 "bowl"
-          ~obs_location_name (str)  例如 "coffee table" / "book shelf" / ...
+          ~obs_location_name (str)  例如 "cafe table" / "book shelf" / ...
           ~obs_found         (bool) True/False
         """
         obj = rospy.get_param("~obs_target_class", "bowl")

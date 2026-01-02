@@ -267,7 +267,7 @@ private:
         // tiago_twist_cmd.angular.z = Kwz * theta;
          
         
-        if(d <= 0.85) 
+        if(d <= 1.0) 
         { 
             // 到达目标 -> 切换到后退状态
             publishZeroV();
@@ -300,7 +300,7 @@ public:
         has_tiago_pose_(false),
         goto_object_(false),
         nav_state_(IDLE),          // 初始化
-        backup_duration_(1.0)      // 后退2秒
+        backup_duration_(5.0)      // 后退5秒
     {
         model_states_sub_=nh_.subscribe("/gazebo/model_states", 10, &tiago_control_node::modelStateCallback, this);
         send_twist_pub_=nh_.advertise<geometry_msgs::Twist>("/key_vel", 10);

@@ -165,7 +165,7 @@ private:
             ROS_INFO_STREAM("Reasoning: Found " << res.likely_locations.size() << " candidates.");
         }
 
-        if(m_query_flag_save) saveQueryToFile(queryPlace);
+        //if(m_query_flag_save) saveQueryToFile(queryPlace);
         return true;
     }
 

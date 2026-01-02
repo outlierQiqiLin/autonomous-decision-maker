@@ -1,0 +1,6 @@
+string target_class
+string location_name
+bool found
+---
+bool ok
+string message

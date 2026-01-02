@@ -10,6 +10,7 @@
 #include <world_percept_assig4/QueryKnowledge.h>
 #include <world_percept_assig4/PredictLikelihood.h>  
 #include <world_percept_assig4/UpdateObjectList.h>  
+#include <world_percept_assig4/AddObservation.h>
 
 class LearningNode
 {
@@ -19,6 +20,8 @@ private:
     ros::ServiceClient client_control_;
     ros::ServiceClient client_ml_;
     ros::ServiceClient client_update_;
+    ros::ServiceClient client_ml_update_;
+
 
 public:
     LearningNode(ros::NodeHandle& nh) : nh_(nh)
@@ -27,6 +30,8 @@ public:
         client_control_ = nh_.serviceClient<world_percept_assig4::GotoObject>("GotoObject");
         client_ml_ = nh_.serviceClient<world_percept_assig4::PredictLikelihood>("predict_likelihood");
         client_update_ = nh_.serviceClient<world_percept_assig4::UpdateObjectList>("/assert_knowledge");
+        client_ml_update_ = nh_.serviceClient<world_percept_assig4::AddObservation>("add_observation");
+
 
         ROS_INFO("Learning Node initialized. Waiting for services...");
         ros::service::waitForService("/query_knowledge");
@@ -137,8 +142,24 @@ public:
                         ROS_INFO("Scanning surroundings...");
                         ros::Duration(2.0).sleep();
 
-                        if(checkTargetFound(target_object)){
-                            ROS_INFO("Mission accompplished, the target has been found!");
+                        // 1) 得到探索结果
+                        bool found = checkTargetFound(target_object);
+
+                        // 2) 回写给 Python 学习节点： (target_object, action_target, found)
+                        world_percept_assig4::AddObservation srv_obs;
+                        srv_obs.request.target_class   = target_object;
+                        srv_obs.request.location_name  = action_target;
+                        srv_obs.request.found          = found ? 1 : 0;
+
+                        if (!client_ml_update_.call(srv_obs)) {
+                            ROS_WARN("Failed to call add_observation (ML update).");
+                        } else {
+                            ROS_INFO_STREAM("ML updated: " << srv_obs.response.message);
+                        }
+
+                        // 3) 如果找到了，再结束 mission
+                        if(found){
+                            ROS_INFO("Mission accomplished, the target has been found!");
                             mission_complete = true;
                             break;
                         }

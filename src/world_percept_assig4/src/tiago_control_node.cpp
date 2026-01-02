@@ -120,11 +120,11 @@ private:
             res.message = goto_object_ ? "Moving" : "Idle/Arrived";
             return true;
         }
-        
+
         if (req.start !=1)
         {
             res.confirm = false;
-            res.message = "start !=1,ignored";
+            res.message = "Invalid start value (expected 1 or 2)";
             return true;
         }
         //save target object name
@@ -139,30 +139,31 @@ private:
         //}
 
         goto_object_ =true;
+        has_target_pose_ = false;  // 强制重新查找目标位置
+
         res.confirm =true;
-        res.message ="start to move";
+        res.message ="Navigation started";
         return true;
     }
     void modelStateCallback(const gazebo_msgs::ModelStates::ConstPtr &msg)
     {
         call_interval_counter_++;
         //find tiago pose
-        bool found =false;
+        bool found_tiago =false;
         for (size_t i=0;i<msg->name.size();++i)
         {
             if (msg->name[i]=="tiago")
             {
                 tiago_pose_=msg->pose[i];
-                found=true;
-                break;
+                found_tiago=true;
             }
             if (goto_object_ && msg->name[i] == target_object_name_)
             {
                 target_pose_ = msg->pose[i];
-                found_target = true;
+                has_target_pose_ = true;
             }
         }
-        has_tiago_pose_= found;
+        has_tiago_pose_= found_tiago;
 
         if (!goto_object_)
             return;
@@ -186,6 +187,7 @@ private:
 
         if(!has_target_pose_) 
         { 
+            ROS_WARN_THROTTLE(2.0, "Waiting for target pose: %s", target_object_name_.c_str());
             return; 
         }
 
@@ -210,8 +212,8 @@ private:
         double Kvx = 0.5;
         // Calculate velocities
         geometry_msgs::Twist tiago_twist_cmd;
-        tiago_twist_cmd.linear.x = Kvx * d;
-        tiago_twist_cmd.angular.z = Kwz * theta;
+        // tiago_twist_cmd.linear.x = Kvx * d;
+        // tiago_twist_cmd.angular.z = Kwz * theta;
          
         
         if(d <= 0.85) 
@@ -220,9 +222,8 @@ private:
             tiago_twist_cmd.angular.z = 0.0; 
             send_twist_pub_.publish(tiago_twist_cmd);
             ROS_INFO_THROTTLE(2.0, "Target reached! Stopping."); 
-            ROS_INFO_STREAM("Debug1! " << goto_object_);
             goto_object_ = false;
-            ROS_INFO_STREAM("Debug2! " << goto_object_);
+            has_target_pose_ = false;
             return;
         } 
         else 
@@ -231,7 +232,7 @@ private:
             tiago_twist_cmd.linear.x = Kvx * d; 
             tiago_twist_cmd.angular.z = Kwz * theta; 
             send_twist_pub_.publish(tiago_twist_cmd);
-            
+            ROS_INFO_THROTTLE(1.0, "Moving to target: distance = %.2f m", d);
         }
 
     }

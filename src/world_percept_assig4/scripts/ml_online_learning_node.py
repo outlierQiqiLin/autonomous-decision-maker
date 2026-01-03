@@ -4,38 +4,22 @@
 """
 ml_online_learning_node.py
 ============================================================
-【用途】
-- 实现你描述的“探索-更新-再查询”的在线学习闭环：
-  1) 初始先验：对任意(目标物体, 地点类别) 的“找到概率”默认 0.5
-  2) 每次探索结束，外部节点把 (object, location, found) 喂给本节点
-  3) 本节点累积成功/失败计数，并用带先验的方式更新概率
-  4) 知识库在做 candidate 决策时向本节点查询概率，得到可用于排序的指导
+[Purpose]
+- Implements the “explore → update → query again” online-learning loop:
+  1) Initial prior: for any (target object, location category), the default “find probability” is 0.5
+  2) After each exploration, an external node feeds (object, location, found) to this node
+  3) This node accumulates success/failure counts and updates the probability with a prior
+  4) When the knowledge base makes candidate decisions, it queries this node for probabilities to guide ranking
 
-【概率模型（可解释且稳定）】
-- 对每个 (obj, loc_type) 维护 Beta-Bernoulli 计数：
+[Probability model]
+- For each (obj, loc_type), maintain Beta-Bernoulli counts:
     success = S, failure = F
-- 先验设为 alpha=1, beta=1  => 初始均值 alpha/(alpha+beta)=0.5
-- 每次观测：
+- Prior: alpha=1, beta=1  => initial mean alpha/(alpha+beta)=0.5
+- For each observation:
     found=True  => S += 1
     found=False => F += 1
-- 输出概率（后验均值）：
+- Output probability (posterior mean):
     p = (alpha + S) / (alpha + beta + S + F)
-
-【ROS 接口（先做最简、方便你手动测试，后续好替换）】
-- 使用 std_srvs/Trigger 做 service（避免你现在卡在自定义 .srv）
-  1) /ml_node/add_observation  : 从 ROS 参数读取一次观测并更新模型
-  2) /ml_node/predict          : 从 ROS 参数读取一次查询并返回概率
-  3) /ml_node/rank_candidates  : 对固定四个候选地点输出概率（写入参数/发布topic）
-
-【可视化概率变化】
-- 每次 add_observation 后：
-  - 在终端打印一个“简单条形图”（不用正规表格，但一眼能看变化）
-  - 将每个候选地点的概率历史写入 CSV（默认 ~/.ros/ml_prob_history.csv）
-  - 可选保存 plot 图片（默认 ~/.ros/ml_prob_plot.png），适合报告截图
-
-【模块化接口预留】
-- 你未来打通 pipeline 时，只需要把 handle_add_observation / handle_predict
-  改成读取自定义 srv 的 req 并返回 res；底层 ProbabilityMemory 不用动。
 """
 
 import os
@@ -55,19 +39,20 @@ from std_msgs.msg import String
 
 
 # -----------------------------
-# 1) 核心：概率记忆（与 ROS 解耦，后续替换接口不影响这里）
+# 1) Core: Probability memory
 # -----------------------------
 @dataclass
 class BetaCounter:
-    """某个 (obj, loc_type) 的成功/失败计数"""
+    """Success / failure counts for a specific (obj, loc_type) pair"""
     success: int = 0
     failure: int = 0
 
 
 class ProbabilityMemory:
     """
-    对 (object, location_type) 维护 Beta 计数，并输出后验概率均值。
-    初始先验：alpha=beta=1 => p=0.5
+    Maintains Beta counts for each (object, location_type) pair
+    and outputs the posterior mean probability.
+    Initial prior: alpha=beta=1 => p=0.5
     """
     def __init__(self, alpha: float = 1.0, beta: float = 1.0):
         self.alpha = float(alpha)
@@ -100,11 +85,11 @@ class ProbabilityMemory:
         with self._lock:
             c = self._mem.get(key, BetaCounter())
             s, f = c.success, c.failure
-        # 后验均值
+        # Posterior mean
         return float((self.alpha + s) / (self.alpha + self.beta + s + f))
 
     def snapshot_for_object(self, obj: str, loc_types: List[str]) -> List[Tuple[str, float, int, int]]:
-        """返回指定 obj 在多个 loc_types 上的 (loc_type, p, S, F) 列表"""
+        """Return a list of (loc_type, p, S, F) for a given object over multiple location types"""
         obj = self._norm(obj)
         out = []
         with self._lock:
@@ -116,7 +101,7 @@ class ProbabilityMemory:
         return out
 
     def dump_state(self) -> dict:
-        """用于持久化：把 memory 转成可 pickle 的 dict"""
+        """For persistence: convert memory into a pickle-serializable dictionary"""
         with self._lock:
             mem_dump = { (k[0], k[1]) : asdict(v) for k, v in self._mem.items() }
         return {
@@ -136,13 +121,13 @@ class ProbabilityMemory:
 
 
 # -----------------------------
-# 2) ROS 节点：最简 service + 可视化 + 持久化
+# 2) ROS node
 # -----------------------------
 class MLOnlineLearningNode:
     def __init__(self):
         rospy.init_node("ml_online_learning_node")
 
-        # 四个候选地点（你当前场景固定这四个；未来可以改为参数或从 KB 传入）
+        # Four candidate locations (fixed for the current scenario)
         self.candidates_raw = [
             "book shelf",
             "cafe table",
@@ -150,26 +135,26 @@ class MLOnlineLearningNode:
             "trash contain",
         ]
 
-        # 先验：alpha=beta=1 => 初始 p=0.5
+        # Prior：alpha=beta=1 => initial p=0.5
         self.alpha = float(rospy.get_param("~alpha", 1.0))
         self.beta = float(rospy.get_param("~beta", 1.0))
 
-        # 持久化路径
+        
         default_dir = os.path.join(os.path.expanduser("~"), ".ros")
         os.makedirs(default_dir, exist_ok=True)
         self.memory_path = rospy.get_param("~memory_path", os.path.join(default_dir, "ml_prob_memory.pkl"))
         self.csv_path = rospy.get_param("~csv_path", os.path.join(default_dir, "ml_prob_history.csv"))
         self.plot_path = rospy.get_param("~plot_path", os.path.join(default_dir, "ml_prob_plot.png"))
 
-        # 是否每次更新都保存图片（需要 matplotlib）
+        
         self.save_plot = bool(rospy.get_param("~save_plot", True))
 
-        # 加载或初始化概率记忆
+        # load or init memory
         self.pm = self._load_or_init_memory()
         # -----------------------------
-        # 在线混淆矩阵（最简单版）
+        # Online confusion matrix
         # -----------------------------
-        self.cm_threshold = 0.5   # p >= 0.5 认为“预测能找到”
+        self.cm_threshold = 0.5   # p >= 0.5 
         self.cm_tp = 0
         self.cm_fp = 0
         self.cm_tn = 0
@@ -177,18 +162,17 @@ class MLOnlineLearningNode:
         self.cm_n  = 0
 
 
-        # 发布一个简单可读的 topic，方便你用 rostopic echo 看“概率快照”
         self.pub_snapshot = rospy.Publisher("/ml_node/prob_snapshot", String, queue_size=10)
 
-        # 注册服务（最简 Trigger）
+        # Trigger
         self.srv_add = rospy.Service("/ml_node/add_observation", Trigger, self.handle_add_observation)
         self.srv_pred = rospy.Service("/ml_node/predict", Trigger, self.handle_predict)
         self.srv_rank = rospy.Service("/ml_node/rank_candidates", Trigger, self.handle_rank_candidates)
 
-        # ★给 C++ learning_node 用的：概率查询服务（名字必须是 predict_likelihood）
+        # ★ Probability query service for the C++ learning_node (service name is "predict_likelihood")
         self.srv_pred_cpp = rospy.Service("predict_likelihood", PredictLikelihood, self.handle_predict_srv)
 
-        # ★给 C++ learning_node 用的：探索结果写入服务（名字必须是 add_observation）
+        # ★ Exploration result update service for the C++ learning_node (service name is "add_observation")
         self.srv_add_cpp = rospy.Service("add_observation", AddObservation, self.handle_add_observation_srv)
         rospy.loginfo("ML online node start.")
         rospy.loginfo("Service:/ml_node/add_observation  /ml_node/predict  /ml_node/rank_candidates")
@@ -196,16 +180,16 @@ class MLOnlineLearningNode:
         rospy.loginfo("history CSV:%s", self.csv_path)
         rospy.loginfo("plot :%s (save_plot=%s)", self.plot_path, self.save_plot)
 
-        # 启动时也发一次默认快照（方便你立刻看到初始 0.5）
+        
         self._publish_and_log_snapshot(obj="bowl")
     # -----------------------------
-    # 4) C++ 对接接口：srv 版本（推荐正式 pipeline 使用）
+    # 4) C++ interface for integration
     # -----------------------------
     def handle_predict_srv(self, req):
         """
-        C++ learning_node 会调用的概率查询接口：
-        请求：target_class, location_name
-        响应：probability
+        Probability query interface called by the C++ learning_node:
+        Request: target_class, location_name
+        Response: probability
         """
         obj = req.target_class
         loc_name = req.location_name
@@ -245,9 +229,9 @@ class MLOnlineLearningNode:
 
     def handle_add_observation_srv(self, req):
         """
-        C++ learning_node 会调用的写入探索结果接口：
-        请求：target_class, location_name, found
-        响应：ok, message
+         Interface for writing exploration results, called by the C++ learning_node:
+        Request: target_class, location_name, found
+        Response: ok, message
         """
         obj = req.target_class
         loc_name = req.location_name
@@ -255,16 +239,16 @@ class MLOnlineLearningNode:
 
         loc_type = self.normalize_location(loc_name)
 
-        # ★ 1) 更新前先取一次概率，用于混淆矩阵
+        # ★ 1) Get the probability BEFORE updating (for the confusion matrix)
         p_before = self.pm.probability(obj, loc_type)
         self._update_and_print_confusion(p_before, found)
 
-        # ★ 2) 再进行真正的学习更新
+        # ★ 2) Perform the actual learning update
         self.pm.update(obj, loc_type, found)
 
         ok, save_msg = self._save_memory()
 
-        # ★ 3) 原有的概率柱状图（保持不变）
+        # ★ 3) Keep the original probability bar visualization 
         self._publish_and_log_snapshot(obj=obj)
 
 
@@ -277,10 +261,10 @@ class MLOnlineLearningNode:
 
 
 
-    # ---------- 地点名归一化（你以后根据 KB 命名随时扩展这里） ----------
+    # ---------- Location name normalization ----------
     def normalize_location(self, location_name: str) -> str:
         """
-        将任意 location_name 归一化到 4 类（或 unknown）：
+         Normalize any location_name into one of 4 categories (or unknown):
         - book_shelf
         - cafe_table
         - table
@@ -294,7 +278,6 @@ class MLOnlineLearningNode:
             return "book_shelf"
         if "cafe" in s and "table" in s:
             return "cafe_table"
-        # 注意：cafe_table 要先匹配，否则会被下面 table 吃掉
         if "table" in s:
             return "table"
         if "trash" in s and ("contain" in s or "container" in s or "bin" in s):
@@ -307,10 +290,10 @@ class MLOnlineLearningNode:
         return "unknown"
 
     def candidate_loc_types(self) -> List[str]:
-        """把四个候选地点映射到归一化类别"""
+        
         return [self.normalize_location(x) for x in self.candidates_raw]
 
-    # ---------- 持久化 ----------
+
     def _load_or_init_memory(self) -> ProbabilityMemory:
         if os.path.exists(self.memory_path):
             try:
@@ -320,18 +303,18 @@ class MLOnlineLearningNode:
                 rospy.loginfo("loading history of probability")
                 return pm
             except Exception as e:
-                rospy.logwarn("加载记忆失败，将重新初始化。原因：%s", str(e))
+                rospy.logwarn("loading history of probability failed.Reason as :%s", str(e))
         return ProbabilityMemory(alpha=self.alpha, beta=self.beta)
 
     def _save_memory(self) -> Tuple[bool, str]:
         try:
             with open(self.memory_path, "wb") as f:
                 pickle.dump(self.pm.dump_state(), f)
-            return True, "保存成功"
+            return True, "saved successfully"
         except Exception as e:
-            return False, f"保存失败：{e}"
+            return False, f"saved failed:{e}"
 
-    # ---------- 简单可视化：条形图（终端） ----------
+    # ---------- visualization: bar chart ----------
     @staticmethod
     def _bar(p: float, width: int = 20) -> str:
         p = max(0.0, min(1.0, float(p)))
@@ -340,40 +323,40 @@ class MLOnlineLearningNode:
 
     def _publish_and_log_snapshot(self, obj: str) -> None:
         """
-        生成四候选地点概率快照：
-        - 发布到 /ml_node/prob_snapshot (String)
-        - 控制台打印一段“直观条形图”
-        - 写入 CSV 并可选保存图片
+       Generate a probability snapshot for the four candidate locations:
+        - Publish to /ml_node/prob_snapshot (String)
+        - Print an intuitive bar chart to the console
+
         """
         loc_types = self.candidate_loc_types()
         snap = self.pm.snapshot_for_object(obj, loc_types)
 
-        # 排序（高到低）
+        # Sort (descending)
         snap_sorted = sorted(snap, key=lambda x: x[1], reverse=True)
 
-        # 组织字符串：便于 rostopic echo
+        # Build a string message
         lines = [f"Target  object: {obj}  (Prio alpha=beta=1 => init 0.5)"]
         for lt, p, s, f in snap_sorted:
             lines.append(f"- {lt:<15s}  p={p:.4f}  S={s} F={f}  {self._bar(p)}")
         best = snap_sorted[0][0]
         msg = "\n".join(lines)
 
-        # 发布 topic
+        # Publish topic
         self.pub_snapshot.publish(String(data=msg))
 
-        # 终端打印（你说不需要正规表格，这里只打印条形图+数字）
+        # Print to console
         print("\n" + msg + "\n")
 
-        # 记录到 CSV（用于“可视化变化”——你可以用 Excel/Matplotlib/gnuplot）
+        # Append to CSV 
         self._append_csv(obj, snap)
 
-        # 可选保存图片（更直观，适合报告截图）
+        # Optionally save a plot image
         if self.save_plot:
             self._save_plot_png(obj)
 
     def _append_csv(self, obj: str, snap: List[Tuple[str, float, int, int]]) -> None:
         """
-        CSV 列：
+        CSV column:
         timestamp, object, loc_type, prob, success, failure
         """
         import datetime
@@ -388,19 +371,19 @@ class MLOnlineLearningNode:
                 for lt, p, s, ff in snap:
                     w.writerow([ts, obj, lt, f"{p:.6f}", s, ff])
         except Exception as e:
-            rospy.logwarn("写CSV失败：%s", str(e))
+            rospy.logwarn("Failed to write CSV:%s", str(e))
 
     def _save_plot_png(self, obj: str) -> None:
         """
-        保存一个简单柱状图到 plot_path。
-        注意：如果你的环境没装 matplotlib，把 ~save_plot 设为 false 即可。
+        save plot png to self.plot_path。
+    
         """
         try:
             import matplotlib
-            matplotlib.use("Agg")  # 无界面保存
+            matplotlib.use("Agg") 
             import matplotlib.pyplot as plt
         except Exception as e:
-            rospy.logwarn("matplotlib 不可用，无法保存图片。可将 ~save_plot:=false。原因：%s", str(e))
+            rospy.logwarn("matplotlib no install,can not save plot.%s", str(e))
             return
 
         loc_types = self.candidate_loc_types()
@@ -420,18 +403,18 @@ class MLOnlineLearningNode:
         try:
             plt.savefig(self.plot_path, dpi=160)
         except Exception as e:
-            rospy.logwarn("保存图片失败：%s", str(e))
+            rospy.logwarn("failed save plot:%s", str(e))
         finally:
             plt.close()
 
     # -----------------------------
-    # 3) ROS Service 回调：最简 Trigger + 参数传参
+    # 3) ROS Service ： Trigger 
     # -----------------------------
     def handle_add_observation(self, _req):
         """
-        从参数读取一条观测并更新：
-          ~obs_target_class  (str)  例如 "bowl"
-          ~obs_location_name (str)  例如 "cafe table" / "book shelf" / ...
+       read and renew：
+          ~obs_target_class  (str)  
+          ~obs_location_name (str)  eg: "cafe table" / "book shelf" / ...
           ~obs_found         (bool) True/False
         """
         obj = rospy.get_param("~obs_target_class", "bowl")
@@ -440,22 +423,20 @@ class MLOnlineLearningNode:
 
         loc_type = self.normalize_location(loc_name)
 
-        # 更新概率记忆
+        # update memory
         self.pm.update(obj, loc_type, found)
 
         ok, save_msg = self._save_memory()
 
-        # 更新后立即发布/展示一次快照（你要的“概率变化可视化”）
         self._publish_and_log_snapshot(obj=obj)
 
-        msg = f"已更新观测：obj={obj}, loc_name='{loc_name}' -> loc_type={loc_type}, found={found}；{save_msg}"
+        msg = f"update observe:obj={obj}, loc_name='{loc_name}' -> loc_type={loc_type}, found={found};{save_msg}"
         rospy.loginfo(msg)
 
         return TriggerResponse(success=True if ok else False, message=msg)
 
     def handle_predict(self, _req):
         """
-        从参数读取一次查询并返回概率：
           ~query_target_class  (str)
           ~query_location_name (str)
         """
@@ -465,7 +446,6 @@ class MLOnlineLearningNode:
 
         p = self.pm.probability(obj, loc_type)
 
-        # 也写到参数，方便别的模块临时读取
         rospy.set_param("~last_probability", float(p))
         rospy.set_param("~last_query_loc_type", loc_type)
 
@@ -474,12 +454,11 @@ class MLOnlineLearningNode:
 
     def handle_rank_candidates(self, _req):
         """
-        对四个候选地点输出概率（用于 KB 做 candidate 排序）：
-          输入参数：~rank_target_class (str)
-          输出：
-            - TriggerResponse.message 给出 best location_type
-            - 参数 ~rank_result  写入结构化列表，便于上游模块读取
-            - topic /ml_node/prob_snapshot 同步发布快照
+          input: ~rank_target_class (str)
+          output:
+            - TriggerResponse.message gives best location_type
+            - ~rank_result 
+            - topic /ml_node/prob_snapshot 
         """
         obj = rospy.get_param("~rank_target_class", "bowl")
         loc_types = self.candidate_loc_types()
@@ -488,13 +467,13 @@ class MLOnlineLearningNode:
 
         best_loc_type, best_p, _, _ = snap_sorted[0]
 
-        # 写参数（结构化输出）
+        
         rank_result = [{"loc_type": lt, "prob": float(p), "success": int(s), "failure": int(f)} for lt, p, s, f in snap_sorted]
         rospy.set_param("~rank_result", rank_result)
         rospy.set_param("~rank_best_loc_type", best_loc_type)
         rospy.set_param("~rank_best_prob", float(best_p))
 
-        # 同步发布/打印快照（可视化变化）
+   
         self._publish_and_log_snapshot(obj=obj)
 
         msg = f"best={best_loc_type}, prob={best_p:.4f}"

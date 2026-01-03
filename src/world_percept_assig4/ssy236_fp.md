@@ -1,3 +1,6 @@
+# group 21: Wei Peng, Qiqi Lin
+# evn: psl
+
 # FP, T01 Reasoning
 
 ## R1: Inference Predicates

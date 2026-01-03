@@ -87,11 +87,12 @@ The objective of this task is to enable the Tiago robot to autonomously navigate
 4.  **Optimization:** In subsequent missions, the robot prioritizes locations with higher learned probabilities, effectively reducing the time required to find the target.
 
 
-## R1: 
-
-## R2: 
-
-## R3: 
+## R1: Implement at least one learning approach
+-We implemented an online probabilistic learning approach based on Bayesian updating (Beta–Bernoulli model).
+## R2: Use at least one online tool
+-We use an online learning tool that updates probabilistic knowledge during execution using Bayesian inference.We implemented a custom online learning tool, rather than using an off-the-shelf library.
+## R3:  Implement at least one evaluation performance
+-We use 'Confusion Matrix' to evaluate performance which can be found in the 'results' folder.
 
 Changes of probability before and after learning and Confusion Matrix can be found in the 'results' folder
 

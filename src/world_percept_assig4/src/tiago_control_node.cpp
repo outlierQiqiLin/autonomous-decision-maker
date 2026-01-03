@@ -57,14 +57,14 @@ private:
 
     // Navigation state
     enum NavState {
-        IDLE,           // 空闲
-        MOVING,         // 移动中
-        BACKING_UP      // 后退中（离开目标）
+        IDLE,           
+        MOVING,         
+        BACKING_UP      
     };
     
     NavState nav_state_;
     ros::Time backup_start_time_;
-    double backup_duration_;  // 后退持续时间（秒）
+    double backup_duration_;  // Backward motion duration (in seconds).
 
     //stop the robot
     void publishZeroV()
@@ -123,11 +123,12 @@ private:
     //callback for gotoObject
     bool gotoObjectCallback(world_percept_assig4::GotoObject::Request &req,world_percept_assig4::GotoObject::Response &res)
     {
-        // 如果 start 为 2，我们将其作为“查询状态”的请求
-        // confirm = true 表示“空闲/已到达”，confirm = false 表示“正在移动中”
+        // If `start` is equal to 2, it is interpreted as a request to enter the “query state.”
+        // `confirm = true` indicates that the system is in an “idle / goal-reached” state, 
+        //whereas `confirm = false` indicates that it is still in motion.
         if (req.start == 2)
         {
-            // 只有在 IDLE 状态才算"到达"
+            // Arrival is considered valid only when the system is in the **IDLE** state.
             res.confirm = (nav_state_ == IDLE);
             
             if (nav_state_ == IDLE)
@@ -158,8 +159,8 @@ private:
         //}
 
         goto_object_ =true;
-        has_target_pose_ = false;  // 强制重新查找目标位置
-        nav_state_ = MOVING;  // 设置为移动状态
+        has_target_pose_ = false;  
+        nav_state_ = MOVING;  
 
         res.confirm =true;
         res.message ="Navigation started";
@@ -185,16 +186,16 @@ private:
         }
         has_tiago_pose_= found_tiago;
 
-        // 处理后退状态防止太近无法调转方向
+        // Handle the backward state to prevent the robot from being too close to obstacles to safely reorient or turn.
         if (nav_state_ == BACKING_UP)
         {
             double elapsed = (ros::Time::now() - backup_start_time_).toSec();
             
             if (elapsed < backup_duration_)
             {
-                // 继续后退
+                // keep backward
                 geometry_msgs::Twist cmd;
-                cmd.linear.x = -0.2;  // 负速度 = 后退
+                cmd.linear.x = -0.2;  
                 cmd.angular.z = 0.0;
                 send_twist_pub_.publish(cmd);
                 
@@ -204,7 +205,7 @@ private:
             }
             else
             {
-                // 后退完成
+                // backward achieved
                 publishZeroV();
                 ROS_INFO("Backup complete. Ready for next target.");
                 
@@ -215,7 +216,7 @@ private:
             }
         }
 
-        // 如果不在导航模式，直接返回
+        // If the system is not in navigation mode, return immediately.
         if (!goto_object_)
             return;
 
@@ -242,7 +243,7 @@ private:
             return; 
         }
 
-        // 导航逻辑
+        // Navigation logic.
         // Extract 2D positions
         Eigen::Vector2d tiago_w(tiago_pose_.position.x, tiago_pose_.position.y);
         Eigen::Vector2d target_w(target_pose_.position.x, target_pose_.position.y);
@@ -269,7 +270,7 @@ private:
         
         if(d <= 1.0) 
         { 
-            // 到达目标 -> 切换到后退状态
+            // Upon reaching the goal, switch to the backward state.
             publishZeroV();
             
             ROS_INFO("Target reached! Starting backup maneuver..."); 
@@ -299,8 +300,8 @@ public:
         has_target_pose_(false),
         has_tiago_pose_(false),
         goto_object_(false),
-        nav_state_(IDLE),          // 初始化
-        backup_duration_(5.0)      // 后退5秒
+        nav_state_(IDLE),          // initialize
+        backup_duration_(5.0)      // backward for 5 seconds
     {
         model_states_sub_=nh_.subscribe("/gazebo/model_states", 10, &tiago_control_node::modelStateCallback, this);
         send_twist_pub_=nh_.advertise<geometry_msgs::Twist>("/key_vel", 10);

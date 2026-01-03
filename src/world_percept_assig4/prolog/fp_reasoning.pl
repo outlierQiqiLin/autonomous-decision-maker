@@ -19,7 +19,7 @@
  *    2) Works even with partial knowledge: fallback to explore.
  */
 
-% 声明这些谓词是“动态的”，意味着运行时可以 assertz/retractall 修改它们的事实
+% Declaring these predicates as dynamic means that their facts can be modified at runtime using assertz and retractall.
 :- dynamic seen/1.
 :- dynamic pose/4.
 :- dynamic type/2.
@@ -27,14 +27,14 @@
 :- dynamic not_found/2.
 :- dynamic task/1.
 :- dynamic home_pose/3.
-:- dynamic prob/3.     % 给 Task2 (learning) 预留：学习后可以写入概率 prob(Target,Place,P)
-
+:- dynamic prob/3.     
+% Reserved for Task 2 (learning): after the learning phase, probabilities can be written in the form prob(Target, Place, P).
 % -----------------------------
 % 1) KB maintenance / assertions
 % -----------------------------
 
-% reset_kb/0：重置知识库，使“从0认知开始”成为可能
-% retractall 会删除所有匹配的事实
+% reset_kb/0: resets the knowledge base, making it possible to start “learning from scratch”
+% retractall removes all facts that match the given pattern
 reset_kb :-
     retractall(seen(_)),
     retractall(pose(_,_,_,_)),
@@ -44,25 +44,25 @@ reset_kb :-
     retractall(task(_)),
     retractall(home_pose(_,_,_)).
 
-% set_task/1：设置当前任务（只保留一个 task）
-% 例如：set_task(find_and_point(plate)).
+% set_task/1: sets the current task (only one task is kept at any time)
+% For example: set_task(find_and_point(plate)).
 set_task(T) :-
     retractall(task(_)),
     assertz(task(T)).
 
-% set_home_pose/3：设置home原点位置（只保留一个）
-% 例如：set_home_pose(0.0,0.0,0.0).
+% set_home_pose/3: sets the home reference pose (only one is kept)
+% For example: set_home_pose(0.0, 0.0, 0.0).
 set_home_pose(X,Y,Yaw) :-
     retractall(home_pose(_,_,_)),
     assertz(home_pose(X,Y,Yaw)).
 
-% assert_percept/4：建议由 C++ 侧调用的“统一事实注入入口”
-% 输入：Name, X, Y, Z
-% 功能：
-% 1) 断言 seen(Name)
-% 2) 更新 pose(Name,X,Y,Z)
-% 3) 通过名字规则推断一个粗类型 T，然后断言 type(Name,T)
-% 统一 Name：兼容 'bowl' / bowl / "bowl"
+% assert_percept/4: a unified fact-injection interface intended to be called from the C++ side
+% Inputs: Name, X, Y, Z
+% Functionality:
+% 1) asserts seen(Name)
+% 2) updates pose(Name, X, Y, Z)
+% 3) infers a coarse type T based on name rules and then asserts type(Name, T)
+% Name normalization: supports 'bowl' / bowl / "bowl"
 normalize_name(NameIn, NameOut) :-
 ( string(NameIn) -> atom_string(NameOut, NameIn)
 ; atom(NameIn) -> NameOut = NameIn
@@ -76,11 +76,11 @@ normalize_name(NameIn, Name),
 ; assertz(seen(Name))
 ),
 
-% pose/4：始终保持最新
+% pose/4: always maintains the most up-to-date value
 retractall(pose(Name,_,_,_)),
 assertz(pose(Name,X,Y,Z)),
 
-% type/2：由名字规则推断
+% type/2: inferred from name-based rules
 infer_type_from_name(Name, T),
 retractall(type(Name,_)),
 assertz(type(Name, T)).
@@ -89,87 +89,88 @@ percept4(Name, X, Y, Z) :-
 seen(Name),
 pose(Name, X, Y, Z).
 
-% mark_searched/2：记录“我搜索过某个 Place，但没找到 Target”
-% 这是“负信息”，非常重要：即使没有新物体出现，你也能积累新知识
+% mark_searched/2: records that a given Place has been searched but the Target was not found
+
 mark_searched(Target, Place) :-
-    % visited(Place)：表示去过/访问过该地点
+    % visited(Place): indicates that the location has been visited
     ( visited(Place) -> true ; assertz(visited(Place)) ),
-    % not_found(Target,Place)：表示在该地点明确没找到目标
+    % not_found(Target,Place): indicates that the target was explicitly not found at the given place
     ( not_found(Target, Place) -> true ; assertz(not_found(Target, Place)) ).
 
 % -----------------------------
 % 2) Name -> type heuristics (EDIT THIS)
 % -----------------------------
 
-% infer_type_from_name/2：基于名字字符串进行类型粗分类
-% 你必须根据 Gazebo 里实际 object_name 命名做修改，否则 type 会乱
-% 例如：table_big, table_small, shelf1, trash_bin, plate1 等
-% 注意：这里用的是 sub_atom/5 做“包含子串”的匹配
+% infer_type_from_name/2: performs coarse type classification based on the name string
+% You must adapt these rules to the actual Gazebo object_name naming scheme; otherwise, type inference will be unreliable.
+% Examples: table_big, table_small, shelf1, trash_bin, plate1, etc.
+% Note: substring matching is implemented via sub_atom/5.
 
-% 如果名字包含 "bowl" 则类型=bowl
+% If the name contains "bowl", then the inferred type is bowl
 infer_type_from_name(Name, bowl)    :- atom(Name), sub_atom(Name, _, _, _, bowl), !.
 
-% 如果名字包含 "table" 则类型=table
+% If the name contains "table", then the inferred type is table
 infer_type_from_name(Name, table)    :- atom(Name), sub_atom(Name, _, _, _, table), !.
 
-% 如果名字包含 "shelf" 或 "bookshelf" 则类型=shelf
+% If the name contains "shelf" or "bookshelf", then the inferred type is shelf
 infer_type_from_name(Name, shelf)    :-
     atom(Name),
     (sub_atom(Name, _, _, _, shelf); sub_atom(Name, _, _, _, bookshelf)),
     !.
 
-% 如果名字包含 "bin" 或 "trash" 则类型=trashbin
+% If the name contains "bin" or "trash", then the inferred type is trashbin
 infer_type_from_name(Name, trashbin) :-
     atom(Name),
     (sub_atom(Name, _, _, _, bin); sub_atom(Name, _, _, _, trash)),
     !.
 
-% 都不匹配则 unknown
+% If none of the above patterns match, the type is set to unknown
 infer_type_from_name(_, unknown).
 
 % -----------------------------
 % 3) Inference predicates (Task1-1)
 % -----------------------------
 
-% (I1) 语义抽象：从物理类别 type 推到“功能类别”
-% 桌子属于可放置表面（support_surface）
+% (I1) Semantic abstraction: mapping from physical type to functional category
+% A table belongs to the class of support surfaces (support_surface)
 support_surface(X) :- type(X, table).
 
-% 书架属于收纳处（storage）
+% A bookshelf belongs to the category of storage
 storage(X)         :- type(X, shelf).
 
-% 垃圾桶属于容器（container）
+% A trash bin belongs to the category of container
 container(X)       :- type(X, trashbin).
 
-% (I2) 目标是否已经看到：如果任务是 find_and_point(Target)
-% 且存在一个 seen(Obj) 且 type(Obj,Target)，则认为目标已看到
+% (I2) Checking whether the target has already been observed: if the task is find_and_point(Target)
+% and there exists some seen(Obj) such that type(Obj, Target) holds, then the target is considered found
 target_seen(Target, Obj) :-
     seen(Obj),
     type(Obj, Target).
 
-% target_found/2：这里暂时和 target_seen 等价，分开写是为了以后扩展
-% 例如你未来可以要求：必须靠近目标、或必须满足颜色等条件才算 found
+% target_found/2: currently equivalent to target_seen; defined separately for future extensions
+% For example, one may later require proximity to the target or satisfaction of additional attributes
+% (e.g., color) before considering the target as found
 target_found(Target, Obj) :-
     target_seen(Target, Obj).
 
-% (I3) 候选搜索点推断：盘子更可能在桌子（support_surface）
-% 这是“先验知识”体现：不需要看到盘子也能推断“该去哪找”
+% (I3) Candidate search location inference: a plate is more likely to be on a table (support_surface)
+% This reflects prior knowledge: even without observing the plate, the system can infer where to search
 candidate_place(bowl, Place) :- support_surface(Place).
 
-% 如果你未来希望“盘子也可能在书架上”，就加：
-% candidate_place(plate, Place) :- storage(Place).
 
-% (I4) 是否需要探索（fallback 推断）
-% 条件：
-%  1) 目标没 found
-%  2) 当前知识里没有任何“已知候选地点”
-%     即：不存在 (candidate_place(Target,P), seen(P))
+
+% (I4) Whether exploration is required (fallback inference)
+% Conditions:
+%  1) the target has not been found
+%  2) there is no known candidate location in the current knowledge base
+%     i.e., there does not exist (candidate_place(Target, P), seen(P))
 need_explore(Target) :-
     task(find_and_point(Target)),
     \+ target_found(Target, _),
     \+ (candidate_place(Target, P), seen(P)).
 
-% (I5) 排除地点推断：如果访问过且明确 not_found，则该地点被排除
+% (I5) Exclusion inference: if a location has been visited and is explicitly marked as not_found,
+% then this location is excluded from future consideration
 ruled_out(Target, Place) :-
     visited(Place),
     not_found(Target, Place).
@@ -178,11 +179,11 @@ ruled_out(Target, Place) :-
 % 4) Decision predicates (Task1-3)
 % -----------------------------
 
-% decide_search_order/2：决定搜索顺序（输出 PlacesOrdered 列表）
-% 先收集候选地点 Candidates（要求：候选且已 seen）
-% 如果 Candidates 非空：
-%  - 若存在 learning 的 prob/3，则按概率排序
-%  - 否则按默认策略排序（未访问优先）
+% decide_search_order/2: determines the search order (outputs the list PlacesOrdered)
+% First, collect candidate locations Candidates (requirements: candidate and already seen)
+% If Candidates is non-empty:
+%  - if learning-based probabilities prob/3 are available, sort by probability
+%  - otherwise, sort using a default strategy (prioritizing unvisited locations)
 decide_search_order(Target, PlacesOrdered) :-
     findall(P, (candidate_place(Target, P), seen(P)), Candidates),
     Candidates \= [],
@@ -191,26 +192,26 @@ decide_search_order(Target, PlacesOrdered) :-
     ;   default_order(Target, Candidates, PlacesOrdered)
     ), !.
 
-% 如果没有候选地点，则顺序为空
+% If there are no candidate locations, the resulting order is empty
 decide_search_order(_, []).
 
-% decide_next_goal/2：决定下一步要去的地点
-% 从搜索顺序里选第一个“还没被排除”的 Place
+% decide_next_goal/2: determines the next location to visit
+% Selects the first Place in the search order that has not been excluded
 decide_next_goal(Target, Place) :-
     decide_search_order(Target, Places),
     member(Place, Places),
     \+ ruled_out(Target, Place),
     !.
 
-% 如果没有合适地点，返回 none（供 decide_action fallback 使用）
+% If no suitable location exists, return none (to be used by decide_action as a fallback)
 decide_next_goal(_, none).
 
-% decide_action/2：最终高层动作输出（最关键的决策谓词）
-% 逻辑：
-% 1) 如果找到目标 -> return_home_then_point(Obj)
-% 2) 否则如果 need_explore -> explore(scan_rotate)
-% 3) 否则如果有 next goal -> navigate_to(Place)
-% 4) 否则兜底 -> explore(patrol_waypoints)
+% decide_action/2: final high-level action output (the most critical decision predicate)
+% Logic:
+% 1) if the target is found -> return_home_then_point(Obj)
+% 2) otherwise, if exploration is required -> explore(scan_rotate)
+% 3) otherwise, if a next goal exists -> navigate_to(Place)
+% 4) otherwise (fallback) -> explore(patrol_waypoints)
 decide_action(Target, Action) :-
     task(find_and_point(Target)),
     (   target_found(Target, Obj)
@@ -227,27 +228,28 @@ decide_action(Target, Action) :-
 % 5) Helpers for Task2 integration
 % -----------------------------
 
-% has_probabilities/2：判断 candidates 中是否至少有一个地点有 prob(Target,Place,P)
+% has_probabilities/2: checks whether at least one location in Candidates
+% has an associated probability prob(Target, Place, P)
 has_probabilities(Target, Places) :-
     member(P, Places),
     prob(Target, P, _), !.
 
-% sort_by_prob_desc/3：按 prob 值降序排序
-% 若某地点没有 prob，则视为 0.0
+% sort_by_prob_desc/3: sorts locations in descending order of probability
+% If a location has no associated prob value, it is treated as 0.0
 sort_by_prob_desc(Target, Places, PlacesSorted) :-
     findall(P-Score,
         ( member(P, Places),
           ( prob(Target, P, Score) -> true ; Score = 0.0 )
         ),
         Pairs),
-    keysort(Pairs, Asc),           % keysort 按 Score 升序
-    reverse(Asc, Desc),            % reverse 得到降序
-    pairs_keys(Desc, PlacesSorted).% 取出地点名列表
+    keysort(Pairs, Asc),           
+    reverse(Asc, Desc),            
+    pairs_keys(Desc, PlacesSorted).% Extract the list of place names
 
-% default_order/3：默认顺序（无学习时）
-% Fresh：没访问过且没排除
-% Old：访问过但没排除
-% 输出 = Fresh 在前 + Old 在后
+% default_order/3: default ordering strategy (without learning)
+% Fresh: not visited and not excluded
+% Old: visited but not excluded
+% Output = Fresh first, followed by Old
 default_order(Target, Places, Ordered) :-
     findall(P, (member(P, Places), \+ visited(P), \+ ruled_out(Target, P)), Fresh),
     findall(P, (member(P, Places), visited(P), \+ ruled_out(Target, P)), Old),
@@ -257,7 +259,7 @@ default_order(Target, Places, Ordered) :-
 % 6) Debug helpers (optional)
 % -----------------------------
 
-% print_kb_summary/0：打印当前 KB 概览，调试用
+% print_kb_summary/0: prints a summary of the current knowledge base, for debugging purposes
 print_kb_summary :-
     findall(O, seen(O), Seen),
     findall(O-T, type(O,T), Types),

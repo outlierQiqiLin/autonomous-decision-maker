@@ -38,7 +38,7 @@ public:
         ros::service::waitForService("GotoObject");
         ROS_INFO("Services connected.");
         
-        // 随机数种子 (用于模拟随机探索)
+        // Random seed (used to simulate random exploration)
         std::srand(std::time(0));
     }
 
@@ -46,13 +46,13 @@ public:
     {
         ROS_INFO_STREAM("=== MISSION START: Find [" << target_object << "] ===");
 
-        // [Loop] 这是一个循环过程：感知 -> 思考 -> 行动 -> 再感知
-        ros::Rate rate(0.5); // 2秒一次决策
+        // [Loop] This is a cyclic process: perception -> reasoning -> action -> perception
+        ros::Rate rate(0.5); // Decision is made every 2 seconds
         bool mission_complete = false;
 
         while(ros::ok() && !mission_complete)
         {
-            // 1. 询问 Reasoning Node 候选地点 (FP.T01)
+            // 1. Query the Reasoning Node for candidate locations (FP.T01)
             world_percept_assig4::QueryKnowledge srv_know;
             srv_know.request.target_class = target_object;
 
@@ -67,27 +67,27 @@ public:
                 break;
             }
 
-            // 2. 决策阶段 (FP.T02 Learning)
+            // 2. Decision-making phase (FP.T02 Learning)
             std::string action_target;
             
             if (candidates.empty())
             {
-                // 情况 A: 没有任何线索 (比如刚启动，还没看见桌子)
-                // 策略: 随机探索 / 原地旋转
+                // Case A: no available cues 
+                // Strategy: random exploration / in-place rotation
                 ROS_WARN("No candidates found. Exploring...");
-                // 这里可以发指令让机器人去预设的 waypoint，或者只是等待 Percept Node 看到东西
-                // 为了演示，我们暂时不做具体移动，只打印
+                
+
                 action_target = ""; 
             }
             else
             {
-                // 情况 B: 有候选地点
-                // 使用 ML 模型选择最佳地点
+                // Case B: candidate locations are available.
+                // Use the ML model to select the best location.
                 action_target = selectBestLocation(candidates, target_object);
                 ROS_INFO_STREAM("ML Model selected best target: " << action_target);
             }
 
-            // 3. 执行阶段 (FP.T03 Robotics)
+            // 3. Execution phase
             if (!action_target.empty())
             {
                 world_percept_assig4::GotoObject srv_ctrl;
@@ -100,27 +100,27 @@ public:
                         ROS_INFO_STREAM("Command sent. Robot moving to " << action_target << "...");
 
                         bool arrived = false;
-                        ros::Rate poll_rate(2); // 每秒检查2次
+                        ros::Rate poll_rate(2); 
                         
-                        // 设置一个最大超时时间，防止死循环 (比如60秒)
+                        
                         ros::Time start_time = ros::Time::now();
                         double timeout = 60.0;
 
                         while(ros::ok() && !arrived)
                         {
-                            // 1. 发送查询请求 (start = 2)
+                            // 1. Send a query request (start = 2)
                             world_percept_assig4::GotoObject srv_status;
                             srv_status.request.start = 2; 
-                            srv_status.request.object_name = ""; // 不需要名字
+                            srv_status.request.object_name = ""; 
 
                             if (client_control_.call(srv_status))
                             {
-                                // 如果 confirm 为 true，说明 tiago_control_node 认为已经停止/到达
+                                // If confirm is true, it indicates that the tiago_control_node believes it has stopped / reached the target
                                 if (srv_status.response.confirm) {
                                     arrived = true;
                                     ROS_INFO("Robot arrived at target.");
                                 } else {
-                                    // 还在移动，继续等待
+                                    // Still moving; continue waiting
                                     ROS_INFO_THROTTLE(2.0, "Robot is still moving...");
                                 }
                             }
@@ -129,10 +129,10 @@ public:
                                 ROS_WARN("Failed to call control service for status check.");
                             }
 
-                            // 2. 检查超时
+                            // 2. Check for timeout
                             if ((ros::Time::now() - start_time).toSec() > timeout) {
                                 ROS_WARN("Navigation Timeout! Robot took too long.");
-                                break; // 强制跳出
+                                break; 
                             }
 
                             ros::spinOnce();
@@ -142,10 +142,10 @@ public:
                         ROS_INFO("Scanning surroundings...");
                         ros::Duration(2.0).sleep();
 
-                        // 1) 得到探索结果
+                        // 1) Obtain the exploration results.
                         bool found = checkTargetFound(target_object);
 
-                        // 2) 回写给 Python 学习节点： (target_object, action_target, found)
+                        // 2) Write back to the Python learning node: (target_object, action_target, found)
                         world_percept_assig4::AddObservation srv_obs;
                         srv_obs.request.target_class   = target_object;
                         srv_obs.request.location_name  = action_target;
@@ -157,7 +157,7 @@ public:
                             ROS_INFO_STREAM("ML updated: " << srv_obs.response.message);
                         }
 
-                        // 3) 如果找到了，再结束 mission
+                        // 3) If the target is found, terminate the mission.
                         if(found){
                             ROS_INFO("Mission accomplished, the target has been found!");
                             mission_complete = true;
@@ -184,10 +184,10 @@ public:
     }
 
 private:
-    // FP.T02: 机器学习/概率模型接口
+    // FP.T02: Machine learning / probabilistic model interface.
     std::string selectBestLocation(const std::vector<std::string>& locations, const std::string& current_target_object_)
     {
-        // 如果只有一个，直接去
+        // If there is only one option, go directly
         if (locations.size() == 1) return locations[0];
 
         std::string chosen = locations[0];
@@ -208,11 +208,11 @@ private:
         return chosen;
     }
 
-    // 模拟训练好的模型预测
+    
     double getProbabilityFromModel(std::string loc, std::string target_obj)
     {
-        // 这里的逻辑就是 FP.T02 要求“实现一种学习方法”的地方
-        // 你可以把它改成读取 CSV 文件，或者调用 Python 脚本
+       
+
         world_percept_assig4::PredictLikelihood srv;
         srv.request.target_class = target_obj;
         srv.request.location_name = loc;
@@ -253,7 +253,7 @@ int main(int argc, char** argv)
 
     ros::Duration(2.0).sleep(); 
     
-    // 假设我们要找 bowl (对应 fp_reasoning.pl 里的逻辑)
+    // We aim to find the bowl (as defined by the logic in fp_reasoning.pl).
     learner.run_mission("bowl"); 
 
     ros::spin();

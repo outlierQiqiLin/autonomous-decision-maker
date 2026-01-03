@@ -91,11 +91,13 @@ The objective of this task is to enable the Tiago robot to autonomously navigate
 
 
 ## R1: Implement at least one learning approach
--We implemented an online probabilistic learning approach based on Bayesian updating (Beta–Bernoulli model).
+- We implemented an online probabilistic learning approach based on Bayesian updating (Beta–Bernoulli model). This approach allows the robot to update the probability of finding objects at specific locations after each observation.
+
 ## R2: Use at least one online tool
--We use an online learning tool that updates probabilistic knowledge during execution using Bayesian inference.We implemented a custom online learning tool, rather than using an off-the-shelf library.
+- We used Pickle for persistent data management to store learned probabilities across sessions.
+
 ## R3:  Implement at least one evaluation performance
--We use 'Confusion Matrix' to evaluate performance which can be found in the 'results' folder.
+- We use 'Confusion Matrix' to evaluate performance which can be found in the 'results' folder.
 
 Changes of probability before and after learning and Confusion Matrix can be found in the 'results' folder
 

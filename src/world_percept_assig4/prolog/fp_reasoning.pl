@@ -45,7 +45,7 @@ reset_kb :-
     retractall(home_pose(_,_,_)).
 
 % set_task/1: sets the current task (only one task is kept at any time)
-% For example: set_task(find_and_point(plate)).
+% For example: set_task(find_and_point(bowl)).
 set_task(T) :-
     retractall(task(_)),
     assertz(task(T)).
@@ -102,8 +102,8 @@ mark_searched(Target, Place) :-
 % -----------------------------
 
 % infer_type_from_name/2: performs coarse type classification based on the name string
-% You must adapt these rules to the actual Gazebo object_name naming scheme; otherwise, type inference will be unreliable.
-% Examples: table_big, table_small, shelf1, trash_bin, plate1, etc.
+% Adapt these rules to the actual Gazebo object_name naming scheme; otherwise, type inference will be unreliable.
+% Examples: table_big, table_small, shelf1, trash_bin, bowl1, etc.
 % Note: substring matching is implemented via sub_atom/5.
 
 % If the name contains "bowl", then the inferred type is bowl
@@ -153,8 +153,8 @@ target_seen(Target, Obj) :-
 target_found(Target, Obj) :-
     target_seen(Target, Obj).
 
-% (I3) Candidate search location inference: a plate is more likely to be on a table (support_surface)
-% This reflects prior knowledge: even without observing the plate, the system can infer where to search
+% (I3) Candidate search location inference: a bowl is more likely to be on a table (support_surface)
+% This reflects prior knowledge: even without observing the bowl, the system can infer where to search
 candidate_place(bowl, Place) :- support_surface(Place).
 
 
